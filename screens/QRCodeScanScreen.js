@@ -1,6 +1,10 @@
 import React, {useState, useEffect} from 'react';
 import {View, StyleSheet, Text, Button} from 'react-native'
 import {BarCodeScanner} from 'expo-barcode-scanner';
+import Storage from '../services/storage'
+import StorageConstant from '../constants/Storage'
+
+const storage = new Storage()
 
 export default class QRCodeScanScreen extends React.Component {
 
@@ -12,16 +16,16 @@ export default class QRCodeScanScreen extends React.Component {
         }
     }
 
-    _handleBarCodeScanned(result) {
+    async _handleBarCodeScanned(result) {
         if (this.state.hasScanned) {
             return
         }
         this.setState({
             hasScanned: true,
         })
+        await storage.pushListUnique(StorageConstant.ETH_WALLETS, result.data)
+        this.props.navigation.state.params.refreshWallet()
         this.props.navigation.goBack()
-        // todo local storage
-        alert(`Bar code with type ${result.type} and data ${result.data} has been scanned!`);
     }
 
     render() {

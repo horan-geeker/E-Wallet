@@ -32,4 +32,8 @@ export default class Infura {
     getETHGasPrice() {
         return this.request('eth_gasPrice')
     }
+
+    getETHTransactionByAddress() {
+        return this.request('eth_transaction')
+    }
 }

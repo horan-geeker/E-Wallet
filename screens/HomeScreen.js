@@ -10,8 +10,12 @@ import EthUtils from  '../services/ethUtils'
 import WalletCard from '../components/home/WalletCard'
 import { Ionicons } from '@expo/vector-icons';
 import {BarCodeScanner} from 'expo-barcode-scanner';
+import Storage from '../services/storage'
+import StorageConstant from '../constants/Storage'
 
 const blockchainApi = new BlockchainApi();
+
+const storage = new Storage()
 
 export default class HomeScreen extends React.Component {
 
@@ -21,23 +25,11 @@ export default class HomeScreen extends React.Component {
             wallets: {
                 eth: [
                     {
-                        data: [
-                            {
-                                address: '0xb71c8D4f8c650C09216c8C8441f16E86f3610Ad7',
-                                balanceOfEther: 'loading...',
-                                balanceOfUSD: 'loading...',
-                            },
-                            {
-                                address: '0xb71c8D4f8c650C09216c8C8441f16E86f3610Ad7',
-                                balanceOfEther: 'loading...',
-                                balanceOfUSD: 'loading...',
-                            },
-                        ]
+                        data: []
                     }
                 ]
             },
             blockNumber: 'loading...',
-            addressFormModalVisible: false
         };
     };
 
@@ -62,7 +54,33 @@ export default class HomeScreen extends React.Component {
         );
     };
 
-    componentDidMount() {
+    async _refreshWallet() {
+        // todo use redux 共享数据到其他 tab 页，这里也读取 redux 的数据，写入操作放在 qrcodescan 里
+        console.log('refresh wallet')
+        // 首先初始化钱包
+        const result = await storage.get(StorageConstant.ETH_WALLETS)
+        console.log('eth wallets:', result)
+        if (result !== null) {
+            const ethWalletState = [
+                {
+                    data: []
+                }
+            ]
+            const ethWallets = JSON.parse(result)
+            for (let i = 0; i < ethWallets.length; i++) {
+                ethWalletState[0].data.push({
+                    address: ethWallets[i],
+                    balanceOfEther: 'loading...',
+                    balanceOfUSD: 'loading...',
+                })
+            }
+            this.setState({
+                wallets: {
+                    eth: ethWalletState
+                }
+            })
+        }
+        // 获取各个钱包的信息
         blockchainApi.getTokenToUSDPrice('eth').then((exchangeRateResponse) => {
             for (let i=0; i < this.state.wallets.eth[0].data.length; i++) {
                 let ethWalletsState = this.state.wallets.eth
@@ -78,17 +96,27 @@ export default class HomeScreen extends React.Component {
                 });
             }
         })
+    }
+
+    componentDidMount() {
+        // 异步获取当前区块
         blockchainApi.getBlockNumber('eth').then((response) => {
             const ethBlockNumber = parseInt(response.result, 16)
             this.setState({
                 blockNumber: ethBlockNumber
             })
         })
+        // 设置跳转路由的参数
+        this.props.navigation.setParams({
+            refreshWallet: this._refreshWallet.bind(this)
+        });
+        this._refreshWallet()
     };
 
 }
 
 HomeScreen.navigationOptions = ({navigation}) => {
+    const {params = {}} = navigation.state;
     return {
         title: '钱包',
         // headerLeft: <Ionicons
@@ -100,7 +128,7 @@ HomeScreen.navigationOptions = ({navigation}) => {
             size={26}
             onPress={async () => {
                 const { status } = await BarCodeScanner.requestPermissionsAsync();
-                navigation.navigate('QRCodeScan')
+                navigation.navigate('QRCodeScan', {refreshWallet: params.refreshWallet})
             }}
         />,
         headerStyle: {
@@ -108,7 +136,6 @@ HomeScreen.navigationOptions = ({navigation}) => {
             marginRight: 8,
         }
     }
-
 };
 
 const styles = StyleSheet.create({
