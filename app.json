@@ -24,12 +24,12 @@
       "**/*"
     ],
     "ios": {
-      "bundleIdentifier": "com.hejunwei.EWallet",
+      "bundleIdentifier": "com.horan.EWallet",
       "buildNumber": "1.0.0",
       "supportsTablet": true
     },
     "android": {
-      "package": "com.hejunwei.EWallet",
+      "package": "com.horan.EWallet",
       "versionCode": 1
     },
     "description": ""
