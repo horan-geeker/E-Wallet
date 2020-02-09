@@ -1,5 +1,5 @@
 import Utils from './Utils'
-const MAIN_URL = 'http://23.111.175.138//api'
+const MAIN_URL = 'https://api.etherscan.io/api'
 
 const PAGE_SIZE = 100
 
@@ -13,7 +13,7 @@ export default class EtherScan {
                 return response.json()
             })
             .catch(error => {
-                console.log('request', error)
+                console.log('request error:', error)
             })
     }
 

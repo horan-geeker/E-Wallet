@@ -1,60 +1,90 @@
 import React from 'react';
-import {SafeAreaView, StyleSheet, FlatList, Picker, Text} from 'react-native';
+import { SafeAreaView, View, StyleSheet, FlatList, Picker, Text, RefreshControl} from 'react-native';
 import TransactionRow from '../components/transactions/TransactionRow'
 import BlockchainApi from '../services/blockchainApi'
 import Storage from '../services/storage'
-import StorageConstant from '../constants/Storage'
 import {Ionicons} from '@expo/vector-icons';
+
+import { connect } from 'react-redux';
 
 const blockchainApi = new BlockchainApi();
 const storage = new Storage()
 
-export default class TransactionsScreen extends React.Component {
+class TransactionsScreen extends React.Component {
 
     constructor(props) {
         super(props)
-        this.state = {
-            showAddressSelect: false,
-            currentAddress: null,
-            transactions: [],
-            ethWallets: [],
+        let currentAddress = null
+        if (props.ethWallets.length > 0) {
+            currentAddress = props.ethWallets[0].address
         }
+        this.state = {
+            refreshing: false,
+            showAddressSelect: false,
+            currentAddress: currentAddress,
+            transactions: [],
+        }
+    }
+
+    _onRefresh() {
+        this.setState({
+            refreshing: true
+        })
+        this._getTransactionsByAddress(this.state.currentAddress).then(() => {
+            this.setState({
+                refreshing: false
+            })
+        })
     }
 
     render() {
         return (
             <SafeAreaView style={styles.container}>
-                <Text>当前地址: {this.state.currentAddress}</Text>
+                <View>
+                    <Text>当前地址: {this.state.currentAddress}</Text>
+                    <Picker
+                        mode="dropdown"
+                        selectedValue={this.state.currentAddress}
+                        style={[styles.addressSelect, this.state.showAddressSelect && styles.showDisplay]}
+                        onValueChange={(itemValue, itemIndex) => {
+                            this.setState({
+                                currentAddress: itemValue
+                            })
+                            this._changeAddressSelectDisplay()
+                            this._getTransactionsByAddress(itemValue)
+                        }
+                        }>
+                        {this.props.ethWallets.map((item, index) => {
+                            return (
+                                <Picker.Item label={item.address} value={item.address} key={index} />
+                            );
+                        })}
+                    </Picker>
+                </View>
                 <FlatList
                     data={this.state.transactions}
                     renderItem={({item}) => <TransactionRow item={item}/>}
                     keyExtractor={(item, index) => index.toString()}
-                />
-                <Picker
-                    mode="dropdown"
-                    selectedValue={this.state.currentAddress}
-                    style={[styles.addressSelect, this.state.showAddressSelect && styles.showDisplay]}
-                    onValueChange={(itemValue, itemIndex) => {
-                        this.setState({
-                            currentAddress: itemValue
-                        })
-                        this._changeAddressSelectDisplay()
-                        this._getTransactionsByAddress(itemValue)
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={this.state.refreshing}
+                            colors={['#ff0000', '#00ff00', '#0000ff']}
+                            progressBackgroundColor={"#ffffff"}
+                            refreshing={this.state.refreshing}
+                            onRefresh={() => {
+                                this._onRefresh();
+                            }}
+                        />
                     }
-                    }>
-                    {this.state.ethWallets.map((item, index) => {
-                        return (
-                            <Picker.Item label={item} value={item} key={index}/>
-                        );
-                    })}
-                </Picker>
+                />
+                
             </SafeAreaView>
         );
     }
 
     _getTransactionsByAddress(address) {
-        blockchainApi.getTransactionByAddress('eth', address).then((response) => {
-            if (response.status === '1') {
+        return blockchainApi.getTransactionByAddress('eth', address).then((response) => {
+            if (response != undefined && response.status === '1') {
                 this.setState({
                     transactions: response.result
                 })
@@ -64,18 +94,6 @@ export default class TransactionsScreen extends React.Component {
         })
     }
 
-    async _getWalletList() {
-        const result = await storage.get(StorageConstant.ETH_WALLETS)
-        if (result !== null) {
-            const ethWallets = JSON.parse(result)
-            this.setState({
-                ethWallets: ethWallets,
-                currentAddress: ethWallets[0],
-            })
-            this._getTransactionsByAddress(ethWallets[0])
-        }
-    }
-
     _changeAddressSelectDisplay() {
         this.setState({
             showAddressSelect: !this.state.showAddressSelect,
@@ -83,8 +101,8 @@ export default class TransactionsScreen extends React.Component {
     }
 
     componentDidMount() {
-        this._getWalletList()
-        // 设置跳转路由的参数
+        this._getTransactionsByAddress(this.state.currentAddress)
+        // 设置 navigation 的参数
         this.props.navigation.setParams({
             showAddressSelect: this._changeAddressSelectDisplay.bind(this)
         });
@@ -96,6 +114,7 @@ TransactionsScreen.navigationOptions = ({navigation}) => {
     return {
         title: '账单',
         headerRight: <Ionicons
+            style={{ marginRight: 8 }}
             name='md-list'
             size={26}
             onPress={async () => {
@@ -103,8 +122,6 @@ TransactionsScreen.navigationOptions = ({navigation}) => {
             }}
         />,
         headerStyle: {
-            marginLeft: 8,
-            marginRight: 8,
         },
     }
 };
@@ -125,3 +142,9 @@ const styles = StyleSheet.create({
         display: 'flex',
     }
 });
+
+const mapStateToProps = (state) => {
+    const { ethWallets } = state
+    return { ethWallets }
+};
+export default connect(mapStateToProps)(TransactionsScreen)

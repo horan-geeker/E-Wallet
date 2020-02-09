@@ -3,7 +3,10 @@ import {
     StyleSheet,
     Text,
     View,
-    SectionList,
+    FlatList,
+    RefreshControl,
+    SafeAreaView,
+    Alert,
 } from 'react-native';
 import BlockchainApi from '../services/blockchainApi'
 import EthUtils from  '../services/ethUtils'
@@ -12,105 +15,158 @@ import { Ionicons } from '@expo/vector-icons';
 import {BarCodeScanner} from 'expo-barcode-scanner';
 import Storage from '../services/storage'
 import StorageConstant from '../constants/Storage'
+import { bindActionCreators } from 'redux';
+import { connect } from 'react-redux';
+import { initWallets, addWallet, changeWallet } from '../redux/walletActions'
 
 const blockchainApi = new BlockchainApi();
+const storage = new Storage();
 
-const storage = new Storage()
-
-export default class HomeScreen extends React.Component {
+class HomeScreen extends React.Component {
 
     constructor(props) {
         super(props);
         this.state = {
-            wallets: {
-                eth: [
-                    {
-                        data: []
-                    }
-                ]
-            },
-            blockNumber: 'loading...',
-        };
+            refreshing: false,
+            ethWallets: [],
+            latestBlockHeight: 'loading...',
+            ethToUSDExchangeRate: '*',
+        }
     };
+
+    _renderHeader() {
+        return (
+            <View>
+                <View style={styles.latestBlockHeight}>
+                    <Text style={styles.latestBlockHeightText}>
+                        当前同步区块高度 {this.state.latestBlockHeight}
+                    </Text>
+                </View>
+                <View style={styles.latestBlockHeight}>
+                    <Text>
+                        当前 ETH/USD 汇率 ${this.state.ethToUSDExchangeRate}/ETH
+                    </Text>
+                </View>
+            </View>
+        )
+    }
 
     render() {
         return (
-            <View style={styles.container}>
-                <Text>
-                    当前同步区块高度 {this.state.blockNumber}
-                </Text>
-                <SectionList
-                    sections={this.state.wallets.eth}
-                    renderItem={this._renderItem.bind(this)}
-                    keyExtractor={(item, index) => index}
+            <SafeAreaView style={styles.container}>
+                <FlatList
+                    ListHeaderComponent={this._renderHeader.bind(this)}
+                    data={this.props.ethWallets}
+                    keyExtractor={(item, index) => index.toString()}
+                    renderItem={({ item }) => <WalletCard item={item} ethToUSDExchangeRate={this.state.ethToUSDExchangeRate} navigation={this.props.navigation}/>}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={this.state.refreshing}
+                            colors={['#ff0000', '#00ff00', '#0000ff']}
+                            progressBackgroundColor={"#ffffff"}
+                            refreshing={this.state.refreshing}
+                            onRefresh={() => {
+                                this._onRefresh();
+                            }}
+                        />
+                    }
                 />
-            </View>
+            </SafeAreaView>
         );
     };
 
-    _renderItem(item) {
-        return (
-            <WalletCard item={item.item} navigation={this.props.navigation}/>
-        );
-    };
-
-    async _refreshWallet() {
-        // todo use redux 共享数据到其他 tab 页，这里也读取 redux 的数据，写入操作放在 qrcodescan 里
-        console.log('refresh wallet')
-        // 首先初始化钱包
-        const result = await storage.get(StorageConstant.ETH_WALLETS)
-        console.log('eth wallets:', result)
-        if (result !== null) {
-            const ethWalletState = [
-                {
-                    data: []
-                }
-            ]
-            const ethWallets = JSON.parse(result)
-            for (let i = 0; i < ethWallets.length; i++) {
-                ethWalletState[0].data.push({
-                    address: ethWallets[i],
-                    balanceOfEther: 'loading...',
-                    balanceOfUSD: 'loading...',
+    async _onRefresh() {
+        this.setState({
+            refreshing: true,
+        })
+        await this._initWallet()
+        this._fetchLatestBlockHeight().then(() => {
+            this._fetchWalletInfo().then(() => {
+                this.setState({
+                    refreshing: false,
                 })
-            }
-            this.setState({
-                wallets: {
-                    eth: ethWalletState
-                }
             })
-        }
+        })
+    }
+
+    async _getAllWallet() {
+        const wallets = await storage.get(StorageConstant.ETH_WALLETS)
+        return JSON.parse(wallets)
+    }
+
+    _fetchWalletInfo() {
         // 获取各个钱包的信息
-        blockchainApi.getTokenToUSDPrice('eth').then((exchangeRateResponse) => {
-            for (let i=0; i < this.state.wallets.eth[0].data.length; i++) {
-                let ethWalletsState = this.state.wallets.eth
-                blockchainApi.getBalance('eth', ethWalletsState[0].data[i].address).then((response) => {
+        return blockchainApi.getTokenToUSDPrice('eth').then((exchangeRateResponse) => {
+            this.setState({
+                ethToUSDExchangeRate: exchangeRateResponse.USD
+            })
+            for (let i = 0; i < this.props.ethWallets.length; i++) {
+                blockchainApi.getBalance('eth', this.props.ethWallets[i].address).then((response) => {
                     const balanceWei = parseInt(response.result, 16)
-                    ethWalletsState[0].data[i].balanceOfEther = EthUtils.numberFix(EthUtils.WeiToEther(balanceWei), 4)
-                    ethWalletsState[0].data[i].balanceOfUSD = EthUtils.numberFix(EthUtils.WeiToUSD(balanceWei, exchangeRateResponse.USD), 2)
-                    this.setState({
-                        wallets: {
-                            eth: ethWalletsState
-                        }
-                    })
-                });
+                    this.props.changeWallet(this.props.ethWallets[i].address, EthUtils.numberFix(EthUtils.WeiToEther(balanceWei), 4), EthUtils.numberFix(EthUtils.WeiToUSD(balanceWei, this.state.ethToUSDExchangeRate), 2))
+                })
             }
         })
     }
 
-    componentDidMount() {
-        // 异步获取当前区块
-        blockchainApi.getBlockNumber('eth').then((response) => {
-            const ethBlockNumber = parseInt(response.result, 16)
+    async _initWallet() {
+        const wallets = await this._getAllWallet()
+        if (wallets === null) {
+            return
+        }
+        console.log('init wallet', wallets)
+        const ethWallets = []
+        for (let i=0; i<wallets.length; i++) {
+            ethWallets.push({
+                address: wallets[i], 
+                balanceOfEther: '*',
+                balanceOfUSD: '*'
+            })
+        }
+        this.props.initWallets(ethWallets)
+    }
+
+    _fetchLatestBlockHeight() {
+        // 异步获取最新区块高度
+        return blockchainApi.getBlockNumber('eth').then((response) => {
+            const ethLatestBlockHeight = parseInt(response.result, 16)
             this.setState({
-                blockNumber: ethBlockNumber
+                latestBlockHeight: ethLatestBlockHeight
             })
         })
-        // 设置跳转路由的参数
+    }
+
+    async handleQRCodeScanned(address) {
+        console.log('handleQRCodeScanned', address)
+        if (address.length >= 40) {
+            const res = address.split(':')
+            if (res.length == 2 && res[1].length >= 40) {
+                address = res[1]
+            }
+            await storage.pushListUnique(StorageConstant.ETH_WALLETS, address)
+            this.props.addWallet(address)
+            // request new wallet info
+            blockchainApi.getBalance('eth', address).then((response) => {
+                const balanceWei = parseInt(response.result, 16)
+                this.props.changeWallet(address, EthUtils.numberFix(EthUtils.WeiToEther(balanceWei), 4), EthUtils.numberFix(EthUtils.WeiToUSD(balanceWei, this.state.ethToUSDExchangeRate), 2))
+            })
+            return true
+        }
+        Alert.alert('二维码不是 eth 地址，请重新扫描')
+        return false
+    }
+
+    componentDidMount() {
+        // 设置 navigation 传递的参数
         this.props.navigation.setParams({
-            refreshWallet: this._refreshWallet.bind(this)
+            handleQRCodeScanned: this.handleQRCodeScanned.bind(this)
         });
-        this._refreshWallet()
+
+        this._fetchLatestBlockHeight()
+        
+        this._initWallet()
+        // 获取钱包信息
+        this._fetchWalletInfo()
     };
 
 }
@@ -124,16 +180,15 @@ HomeScreen.navigationOptions = ({navigation}) => {
         //     size={26}
         // />,
         headerRight: <Ionicons
+            style={{marginRight: 8}}
             name='ios-add-circle-outline'
             size={26}
             onPress={async () => {
                 const { status } = await BarCodeScanner.requestPermissionsAsync();
-                navigation.navigate('QRCodeScan', {refreshWallet: params.refreshWallet})
+                navigation.navigate('QRCodeScan', { handleQRCodeScanned: params.handleQRCodeScanned})
             }}
         />,
         headerStyle: {
-            marginLeft: 8,
-            marginRight: 8,
         }
     }
 };
@@ -141,6 +196,26 @@ HomeScreen.navigationOptions = ({navigation}) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#eee',
     },
+    latestBlockHeight: {
+        padding: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    latestBlockHeightText: {
+        fontWeight: 'bold',
+    }
 });
+
+const mapStateToProps = (state) => {
+    return { ethWallets: state.ethWallets }
+};
+
+const mapDispatchToProps = (dispatch) => (
+    bindActionCreators({
+        initWallets, addWallet, changeWallet
+    }, dispatch)
+);
+
+export default connect(mapStateToProps, mapDispatchToProps)(HomeScreen)

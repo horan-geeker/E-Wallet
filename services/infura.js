@@ -5,6 +5,7 @@ const PROJECT_SECRET = '33bd11c1ccd141268d92306e2a7d2917'
 export default class Infura {
 
     request(method, params) {
+        console.log('request', MAIN_URL, method, params)
         return fetch(MAIN_URL, {
             method: 'POST',
             headers: {
@@ -18,7 +19,10 @@ export default class Infura {
                 "params": params
             }),
         })
-            .then((response) => response.json())
+            .then((response) => {
+                console.log('response', 'done')
+                return  response.json()
+            })
     }
 
     getETHBalance(address) {
