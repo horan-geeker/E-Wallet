@@ -12,5 +12,6 @@ export default {
   noticeBackground: tintColor,
   noticeText: '#fff',
   ether: '#3498db',
-  eWalletTheme: '#00abf0'
+  eWalletTheme: '#00abf0',
+  screenBackgroundColor: '#eee',
 };

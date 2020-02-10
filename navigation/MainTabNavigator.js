@@ -6,6 +6,7 @@ import {createBottomTabNavigator} from 'react-navigation-tabs';
 import TabBarIcon from '../components/TabBarIcon';
 import HomeScreen from '../screens/HomeScreen';
 import TransactionsScreen from '../screens/TransactionsScreen';
+import TransactionDetailScreen from '../screens/TransactionDetailScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import QRCodeScanScreen from '../screens/QRCodeScanScreen';
 import WalletDetailScreen from '../screens/WalletDetailScreen'
@@ -49,15 +50,24 @@ HomeStack.path = '';
 const TransactionsStack = createStackNavigator(
     {
         Transactions: TransactionsScreen,
+        TransactionDetail: TransactionDetailScreen
     },
     config
 );
 
-TransactionsStack.navigationOptions = {
-    tabBarLabel: '账单',
-    tabBarIcon: ({focused}) => (
-        <TabBarIcon focused={focused} name={Platform.OS === 'ios' ? 'md-paper' : 'md-paper'}/>
-    ),
+TransactionsStack.navigationOptions = ({ navigation }) => {
+    // 隐藏 tabbar
+    let tabBarVisible = true;
+    if (navigation.state.index > 0) {
+        tabBarVisible = false;
+    }
+    return {
+        tabBarLabel: '账单',
+        tabBarIcon: ({ focused }) => (
+            <TabBarIcon focused={focused} name={Platform.OS === 'ios' ? 'md-paper' : 'md-paper'} />
+        ),
+        tabBarVisible: tabBarVisible
+    }
 };
 
 TransactionsStack.path = '';

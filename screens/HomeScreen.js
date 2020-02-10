@@ -18,6 +18,7 @@ import StorageConstant from '../constants/Storage'
 import { bindActionCreators } from 'redux';
 import { connect } from 'react-redux';
 import { initWallets, addWallet, changeWallet } from '../redux/walletActions'
+import Colors from '../constants/Colors'
 
 const blockchainApi = new BlockchainApi();
 const storage = new Storage();
@@ -196,7 +197,7 @@ HomeScreen.navigationOptions = ({navigation}) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#eee',
+        backgroundColor: Colors.screenBackgroundColor,
     },
     latestBlockHeight: {
         padding: 4,

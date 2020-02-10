@@ -1,14 +1,12 @@
 import React from 'react';
-import { SafeAreaView, View, StyleSheet, FlatList, Picker, Text, RefreshControl} from 'react-native';
+import { SafeAreaView, TouchableWithoutFeedback, View, StyleSheet, FlatList, Picker, Text, RefreshControl} from 'react-native';
 import TransactionRow from '../components/transactions/TransactionRow'
 import BlockchainApi from '../services/blockchainApi'
-import Storage from '../services/storage'
 import {Ionicons} from '@expo/vector-icons';
-
+import Colors from '../constants/Colors'
 import { connect } from 'react-redux';
 
 const blockchainApi = new BlockchainApi();
-const storage = new Storage()
 
 class TransactionsScreen extends React.Component {
 
@@ -41,7 +39,12 @@ class TransactionsScreen extends React.Component {
         return (
             <SafeAreaView style={styles.container}>
                 <View>
-                    <Text>当前地址: {this.state.currentAddress}</Text>
+                    <TouchableWithoutFeedback onPress={this._changeAddressSelectDisplay.bind(this)}>
+                        <View style={styles.addressPicker}>
+                            <Text style={styles.addressPickerText}>{this.state.currentAddress}</Text>
+                            <Ionicons style={styles.addressPickerIcon} name="ios-arrow-dropdown" size={14}/>
+                        </View>
+                    </TouchableWithoutFeedback>
                     <Picker
                         mode="dropdown"
                         selectedValue={this.state.currentAddress}
@@ -51,7 +54,7 @@ class TransactionsScreen extends React.Component {
                                 currentAddress: itemValue
                             })
                             this._changeAddressSelectDisplay()
-                            this._getTransactionsByAddress(itemValue)
+                            this._onRefresh()
                         }
                         }>
                         {this.props.ethWallets.map((item, index) => {
@@ -63,7 +66,7 @@ class TransactionsScreen extends React.Component {
                 </View>
                 <FlatList
                     data={this.state.transactions}
-                    renderItem={({item}) => <TransactionRow item={item}/>}
+                    renderItem={({ item }) => <TransactionRow item={item} address={this.state.currentAddress} navigation={this.props.navigation}/>}
                     keyExtractor={(item, index) => index.toString()}
                     refreshControl={
                         <RefreshControl
@@ -82,8 +85,11 @@ class TransactionsScreen extends React.Component {
         );
     }
 
-    _getTransactionsByAddress(address) {
-        return blockchainApi.getTransactionByAddress('eth', address).then((response) => {
+    _getTransactionsByAddress() {
+        this.setState({
+            transactions: []
+        })
+        return blockchainApi.getTransactionByAddress('eth', this.state.currentAddress).then((response) => {
             if (response != undefined && response.status === '1') {
                 this.setState({
                     transactions: response.result
@@ -101,11 +107,11 @@ class TransactionsScreen extends React.Component {
     }
 
     componentDidMount() {
-        this._getTransactionsByAddress(this.state.currentAddress)
+        this._onRefresh()
         // 设置 navigation 的参数
-        this.props.navigation.setParams({
-            showAddressSelect: this._changeAddressSelectDisplay.bind(this)
-        });
+        // this.props.navigation.setParams({
+        //     showAddressSelect: this._changeAddressSelectDisplay.bind(this)
+        // });
     };
 }
 
@@ -113,14 +119,14 @@ TransactionsScreen.navigationOptions = ({navigation}) => {
     const {params = {}} = navigation.state;
     return {
         title: '账单',
-        headerRight: <Ionicons
-            style={{ marginRight: 8 }}
-            name='md-list'
-            size={26}
-            onPress={async () => {
-                params.showAddressSelect()
-            }}
-        />,
+        // headerRight: <Ionicons
+        //     style={{ marginRight: 8 }}
+        //     name='md-list'
+        //     size={26}
+        //     onPress={async () => {
+        //         params.showAddressSelect()
+        //     }}
+        // />,
         headerStyle: {
         },
     }
@@ -128,11 +134,21 @@ TransactionsScreen.navigationOptions = ({navigation}) => {
 
 const styles = StyleSheet.create({
     container: {
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
+        flex: 1,
+        backgroundColor: Colors.screenBackgroundColor
+    },
+    addressPicker: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    addressPickerText: {
+        fontSize: 14,
+        fontWeight: 'bold'
+    },
+    addressPickerIcon: {
+        marginLeft: 2,
     },
     addressSelect: {
         position: 'relative',
